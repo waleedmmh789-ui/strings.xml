@@ -13,13 +13,27 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Unzip Project
+    # 1. فك الضغط والبحث عن مجلد المشروع
+    - name: Unzip Project and Locate Gradlew
       run: |
         if [ -f "project.zip" ]; then
+          echo "Found project.zip. Extracting..."
           unzip project.zip -d ./unzipped_project
-          PROJECT_DIR=$(find ./unzipped_project -name "gradlew" -exec dirname {} \; | head -n 1)
+          # البحث عن ملف gradlew في أي مكان داخل المجلد المستخرج
+          GRADLEW_PATH=$(find ./unzipped_project -name "gradlew" -type f | head -n 1)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "Error: gradlew not found inside project.zip!"
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$GRADLEW_PATH")
+          echo "Found gradlew in: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
         else
+          echo "No project.zip found. Checking root..."
+          if [ ! -f "gradlew" ]; then
+            echo "Error: gradlew not found in repository root!"
+            exit 1
+          fi
           echo "PROJECT_DIR=." >> $GITHUB_ENV
         fi
 
@@ -29,7 +43,6 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # إعداد Android SDK بشكل مباشر لتجنب أخطاء الأدوات المساعدة
     - name: Setup Android SDK
       run: |
         echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV

@@ -13,28 +13,24 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 1. فك الضغط والبحث عن مجلد المشروع
+    # البحث عن أي ملف ZIP وفك ضغطه
     - name: Unzip Project and Locate Gradlew
       run: |
-        if [ -f "project.zip" ]; then
-          echo "Found project.zip. Extracting..."
-          unzip project.zip -d ./unzipped_project
-          # البحث عن ملف gradlew في أي مكان داخل المجلد المستخرج
+        ZIP_FILE=$(ls *.zip 2>/dev/null | head -n 1)
+        if [ -n "$ZIP_FILE" ]; then
+          echo "Found $ZIP_FILE. Extracting..."
+          unzip "$ZIP_FILE" -d ./unzipped_project
           GRADLEW_PATH=$(find ./unzipped_project -name "gradlew" -type f | head -n 1)
           if [ -z "$GRADLEW_PATH" ]; then
-            echo "Error: gradlew not found inside project.zip!"
+            echo "Error: gradlew not found inside the zip file!"
             exit 1
           fi
           PROJECT_DIR=$(dirname "$GRADLEW_PATH")
           echo "Found gradlew in: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
         else
-          echo "No project.zip found. Checking root..."
-          if [ ! -f "gradlew" ]; then
-            echo "Error: gradlew not found in repository root!"
-            exit 1
-          fi
-          echo "PROJECT_DIR=." >> $GITHUB_ENV
+          echo "No zip file found in repository root!"
+          exit 1
         fi
 
     - name: Set up JDK 17

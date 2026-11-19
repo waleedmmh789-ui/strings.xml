@@ -13,23 +13,23 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # البحث عن أي ملف ZIP وفك ضغطه
-    - name: Unzip Project and Locate Gradlew
+    - name: Unzip Project
       run: |
         ZIP_FILE=$(ls *.zip 2>/dev/null | head -n 1)
         if [ -n "$ZIP_FILE" ]; then
           echo "Found $ZIP_FILE. Extracting..."
           unzip "$ZIP_FILE" -d ./unzipped_project
-          GRADLEW_PATH=$(find ./unzipped_project -name "gradlew" -type f | head -n 1)
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "Error: gradlew not found inside the zip file!"
-            exit 1
+          # البحث عن مجلد app لتحديد مسار المشروع
+          APP_DIR=$(find ./unzipped_project -type d -name "app" | head -n 1)
+          if [ -z "$APP_DIR" ]; then
+             echo "Error: app folder not found!"
+             exit 1
           fi
-          PROJECT_DIR=$(dirname "$GRADLEW_PATH")
-          echo "Found gradlew in: $PROJECT_DIR"
+          PROJECT_DIR=$(dirname "$APP_DIR")
+          echo "Project Directory: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
         else
-          echo "No zip file found in repository root!"
+          echo "No zip file found."
           exit 1
         fi
 
@@ -39,6 +39,16 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    # إنشاء ملف gradlew إذا لم يكن موجوداً
+    - name: Generate Gradlew if missing
+      working-directory: ${{ env.PROJECT_DIR }}
+      run: |
+        if [ ! -f "gradlew" ]; then
+          echo "gradlew missing. Generating..."
+          gradle wrapper
+        fi
+        chmod +x gradlew
+
     - name: Setup Android SDK
       run: |
         echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
@@ -46,25 +56,22 @@ jobs:
         echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
         yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x ${{ env.PROJECT_DIR }}/gradlew
-
     - name: Build APK
       working-directory: ${{ env.PROJECT_DIR }}
-      run: ./gradlew assembleRelease
+      run: ./gradlew assembleDebug
 
     - name: Build AAB
       working-directory: ${{ env.PROJECT_DIR }}
-      run: ./gradlew bundleRelease
+      run: ./gradlew bundleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: App-Release-APK
-        path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/release/*.apk
+        name: App-Debug-APK
+        path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
 
     - name: Upload AAB
       uses: actions/upload-artifact@v4
       with:
-        name: App-Release-AAB
-        path: ${{ env.PROJECT_DIR }}/app/build/outputs/bundle/release/*.aab
+        name: App-Debug-AAB
+        path: ${{ env.PROJECT_DIR }}/app/build/outputs/bundle/debug/*.aab

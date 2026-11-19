@@ -1,7 +1,7 @@
 name: Build APK and AAB
 
 on:
-  workflow_dispatch: # يسمح لك بتشغيله يدوياً من تطبيق GitHub
+  workflow_dispatch:
   push:
     branches: [ "main" ]
 
@@ -10,57 +10,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. جلب كود المشروع
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. فك الضغط (إذا كان الكود مضغوطاً في ملف ZIP)
-    # ملاحظة: ضع ملف المشروع المضغوط باسم project.zip في المستودع
+    # 1. فك الضغط
     - name: Unzip Project
       run: |
         if [ -f "project.zip" ]; then
           unzip project.zip -d ./unzipped_project
-          # البحث عن مجلد المشروع الذي يحتوي على gradlew
           PROJECT_DIR=$(find ./unzipped_project -name "gradlew" -exec dirname {} \; | head -n 1)
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
         else
-          echo "No project.zip found, assuming code is already extracted."
           echo "PROJECT_DIR=." >> $GITHUB_ENV
         fi
 
-    # 3. إعداد Java 17 (مطلوب لبناء أندرويد الحديث)
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    # 4. إعداد Android SDK
+    # 2. إعداد البيئة الأساسية لأندرويد (بدون أوامر معقدة)
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
+      with:
+        packages: 'tools platform-tools platforms;android-34 build-tools;34.0.0'
+        log-accepted-android-sdk-licenses: false
 
-    # 5. إعطاء صلاحية التنفيذ لملف gradlew
+    # 3. إجبار النظام على قبول كل التراخيص لتجنب توقف البناء
+    - name: Accept Android SDK Licenses
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
     - name: Grant execute permission for gradlew
       run: chmod +x ${{ env.PROJECT_DIR }}/gradlew
 
-    # 6. بناء ملف APK (نسخة الإصدار Release)
     - name: Build APK
       working-directory: ${{ env.PROJECT_DIR }}
       run: ./gradlew assembleRelease
 
-    # 7. بناء ملف AAB (نسخة الإصدار Release)
     - name: Build AAB
       working-directory: ${{ env.PROJECT_DIR }}
       run: ./gradlew bundleRelease
 
-    # 8. رفع ملف APK لتتمكن من تحميله
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: App-Release-APK
         path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/release/*.apk
 
-    # 9. رفع ملف AAB لتتمكن من تحميله
     - name: Upload AAB
       uses: actions/upload-artifact@v4
       with:
